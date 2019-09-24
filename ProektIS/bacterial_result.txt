@@ -1,0 +1,3 @@
+Filenum	 Total Area	 Infected Area	 Infection (%)	
+
+ Average percentage error = 0.0
