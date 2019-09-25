@@ -17,37 +17,92 @@ from keras.preprocessing import image
 from keras.preprocessing.image import img_to_array
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.model_selection import train_test_split
-import matplotlib.pyplot as pyplot
+import matplotlib.pyplot as plt
 import glob
+import math
+
+def get_appropriate_place_for_unhealthy(id):
+    return (id-13)*2+1 
+
+def shuffle_for_uniformity(image_list, classes_list):
+    threshold=math.ceil(len(image_list)/2)
+    for id in range(threshold, len(image_list)):
+        new_id=get_appropriate_place_for_unhealthy(id)
+        image_list[new_id], image_list[id]=image_list[id], image_list[new_id]
+        classes_list[new_id], classes_list[id]=classes_list[id], classes_list[new_id]
+
+
 #somehow enter data in program and make appropriate adjustments
-class_healthy=1
-class_mildew=2
+class_healthy=0
+class_mildew=1
 all_images, all_classes=[], []
-max_height, max_width=-1, -1
+default_image_size=(256, 256)
 for filename in glob.glob('./healthy_images/*.jpg'):
     img=cv2.imread(filename)
-    img_grayscaled=cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    all_images.append(img)
+    img=cv2.resize(img, default_image_size)
+    all_images.append(img_to_array(img))
     all_classes.append(class_healthy)
 for filename in glob.glob('./mildew_images/*.jpg'):
     img=cv2.imread(filename)
-    img_grayscaled=cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    all_images.append(img)
+    img=cv2.resize(img, default_image_size)
+    all_images.append(img_to_array(img))
     all_classes.append(class_mildew)
+all_images_scaled=np.array(all_images, dtype=np.float16)/255.0
+
+shuffle_for_uniformity(all_images_scaled, all_classes)#1, 2, 1, 2, ...
+x_train, x_test, y_train, y_test=train_test_split(all_images_scaled, all_classes, test_size=0.2, random_state=42)
+aug = ImageDataGenerator(
+    rotation_range=25, width_shift_range=0.1,
+    height_shift_range=0.1, shear_range=0.2, 
+    zoom_range=0.2,horizontal_flip=True, 
+    fill_mode="nearest")
 #create appropriate model/cnn
-model=Sequential()
-"""
-model.add(Conv2D(4, kernel_size=(5, 5)))
-model.add(Activation('relu'))
-model.add(Conv2D(4, kernel_size=(5, 5)))
-model.add(AveragePooling2D(pool_size=(3, 3)))
-model.add(Dense(2))"""
-model.add(Dense(32, activation='relu', use_bias=True))
-model.add(Dense(10, activation='sigmoid'))
-model.add(Dense(2))
-#congfigure and compile model
-model.compile(optimizer='rmsprop',
+model = Sequential()
+chanDim = -1
+if K.image_data_format() == "channels_first":
+    chanDim = 1
+height, width, depth=256, 256, 3
+input_shape_=(height, width, depth)
+EPOCHS = 4
+INIT_LR = 1e-3
+BS = 2
+model.add(Conv2D(32, (3, 3), padding="same", input_shape=input_shape_))
+model.add(Activation("relu"))
+model.add(BatchNormalization(axis=chanDim))
+model.add(Dropout(0.25))
+model.add(Conv2D(64, (3, 3), padding="same"))
+model.add(Activation("relu"))
+model.add(BatchNormalization(axis=chanDim))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Conv2D(64, (3, 3), padding="same"))
+model.add(Activation("relu"))
+model.add(BatchNormalization(axis=chanDim))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Dropout(0.25))
+model.add(Conv2D(128, (3, 3), padding="same"))
+model.add(Activation("relu"))
+model.add(BatchNormalization(axis=chanDim))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Conv2D(128, (3, 3), padding="same"))
+model.add(Activation("relu"))
+model.add(BatchNormalization(axis=chanDim))
+model.add(Dropout(0.25))
+model.add(Flatten())
+model.add(Dense(1024))
+model.add(Activation("relu"))
+model.add(BatchNormalization())
+model.add(Dropout(0.125))
+model.add(Dense(1))
+model.summary()
+#configure and compile model
+opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
+model.compile(optimizer=opt,
               loss='binary_crossentropy',
               metrics=['accuracy'])
 #train model appropriately
-model.fit([np.array(None), np.array(None)], all_classes, epochs=5, batch_size=13)
+history = model.fit_generator(
+    aug.flow(x_train, y_train, batch_size=BS),
+    validation_data=(x_test, y_test),
+    steps_per_epoch=len(x_train) // BS,
+    epochs=EPOCHS, verbose=1
+    )
