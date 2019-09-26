@@ -12,7 +12,7 @@ from keras.layers.core import Activation, Flatten, Dropout, Dense
 from keras.layers import AveragePooling2D
 from keras import backend as K
 from keras.preprocessing.image import ImageDataGenerator
-from keras.optimizers import Adam
+from keras.optimizers import *
 from keras.preprocessing import image
 from keras.preprocessing.image import img_to_array
 from sklearn.preprocessing import MultiLabelBinarizer
@@ -36,7 +36,7 @@ def shuffle_for_uniformity(image_list, classes_list):
 class_healthy=0
 class_mildew=1
 all_images, all_classes=[], []
-default_image_size=(256, 256)
+default_image_size=(320, 320)
 for filename in glob.glob('./healthy_images/*.jpg'):
     img=cv2.imread(filename)
     img=cv2.resize(img, default_image_size)
@@ -57,52 +57,71 @@ aug = ImageDataGenerator(
     zoom_range=0.2,horizontal_flip=True, 
     fill_mode="nearest")
 #create appropriate model/cnn
-model = Sequential()
-chanDim = -1
-if K.image_data_format() == "channels_first":
-    chanDim = 1
-height, width, depth=256, 256, 3
-input_shape_=(height, width, depth)
-EPOCHS = 4
-INIT_LR = 1e-3
-BS = 2
-model.add(Conv2D(32, (3, 3), padding="same", input_shape=input_shape_))
-model.add(Activation("relu"))
-model.add(BatchNormalization(axis=chanDim))
-model.add(Dropout(0.25))
-model.add(Conv2D(64, (3, 3), padding="same"))
-model.add(Activation("relu"))
-model.add(BatchNormalization(axis=chanDim))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Conv2D(64, (3, 3), padding="same"))
-model.add(Activation("relu"))
-model.add(BatchNormalization(axis=chanDim))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
-model.add(Conv2D(128, (3, 3), padding="same"))
-model.add(Activation("relu"))
-model.add(BatchNormalization(axis=chanDim))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Conv2D(128, (3, 3), padding="same"))
-model.add(Activation("relu"))
-model.add(BatchNormalization(axis=chanDim))
-model.add(Dropout(0.25))
-model.add(Flatten())
-model.add(Dense(1024))
-model.add(Activation("relu"))
-model.add(BatchNormalization())
-model.add(Dropout(0.125))
+
+model=Sequential()
+input_shape_=320, 320, 3
+model.add(Conv2D(32, (5, 5), padding="same", input_shape=input_shape_))
+model.add(Activation('elu'))
+model.add(AveragePooling2D(2, 2))
+model.add(Dropout(0.15))
+model.add(Conv2D(32, (5, 5), padding="same"))
+model.add(Activation('elu'))
+model.add(Conv2D(32, (2, 2), padding="same"))
+model.add(Dense(20, activation="tanh"))
+model.add(Flatten("channels_last"))
 model.add(Dense(1))
-model.summary()
-#configure and compile model
-opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
+opt=SGD(0.2, 0.1)
 model.compile(optimizer=opt,
-              loss='binary_crossentropy',
+               loss='binary_crossentropy',
               metrics=['accuracy'])
-#train model appropriately
-history = model.fit_generator(
-    aug.flow(x_train, y_train, batch_size=BS),
-    validation_data=(x_test, y_test),
-    steps_per_epoch=len(x_train) // BS,
-    epochs=EPOCHS, verbose=1
-    )
+model.fit(x=x_train, y=y_train, batch_size=4, epochs=1, validation_data=(x_test, y_test))
+# model = Sequential()
+# chanDim = -1
+# if K.image_data_format() == "channels_first":
+#     chanDim = 1
+# height, width, depth=320, 320, 3
+# input_shape_=(height, width, depth)
+# EPOCHS = 4
+# INIT_LR = 0.2
+# BS = 2
+# model.add(Conv2D(32, (3, 3), padding="same", input_shape=input_shape_))
+# model.add(Activation("relu"))
+# model.add(BatchNormalization(axis=chanDim))
+# model.add(Dropout(0.25))
+# model.add(Conv2D(64, (3, 3), padding="same"))
+# model.add(Activation("relu"))
+# model.add(BatchNormalization(axis=chanDim))
+# model.add(MaxPooling2D(pool_size=(2, 2)))
+# model.add(Conv2D(64, (3, 3), padding="same"))
+# model.add(Activation("relu"))
+# model.add(BatchNormalization(axis=chanDim))
+# model.add(MaxPooling2D(pool_size=(2, 2)))
+# model.add(Dropout(0.25))
+# model.add(Conv2D(128, (3, 3), padding="same"))
+# model.add(Activation("relu"))
+# model.add(BatchNormalization(axis=chanDim))
+# model.add(MaxPooling2D(pool_size=(2, 2)))
+# model.add(Conv2D(128, (3, 3), padding="same"))
+# model.add(Activation("relu"))
+# model.add(BatchNormalization(axis=chanDim))
+# model.add(Dropout(0.25))
+# model.add(Flatten())
+# model.add(Dense(1024))
+# model.add(Activation("relu"))
+# model.add(BatchNormalization())
+# model.add(Dropout(0.125))
+# model.add(Dense(1))
+# model.summary()
+# #configure and compile model
+# opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
+# model.compile(optimizer=opt,
+#               loss='binary_crossentropy',
+#               metrics=['accuracy'])
+# #train model appropriately
+# history = model.fit_generator(
+#     aug.flow(x_train, y_train, batch_size=BS),
+#     validation_data=(x_test, y_test),
+#     steps_per_epoch=len(x_train) // BS,
+#     epochs=EPOCHS, verbose=1
+#     )
+# model.fit(all_images_scaled, all_classes, epochs=2, batch_size=4)
